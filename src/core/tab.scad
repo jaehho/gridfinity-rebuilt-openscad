@@ -15,14 +15,22 @@ use <../helpers/grid_element.scad>
  *          Aka +X axis.
  *          Angled so the base is touching the origin.
  * @param width How wide the tab is.
+ * @param depth How deep the tab protrudes into the bin.
+ *              Defaults to the library-standard depth.
+ * @param height Total vertical extent of the tab.
+ *               Defaults to the height that keeps the support ramp at the
+ *               library-standard overhang angle.
  */
-module tab(width = TAB_WIDTH_NOMINAL){
+module tab(width = TAB_WIDTH_NOMINAL, depth = _tab_depth, height = undef){
     assert(is_num(width) && width > 0);
+    assert(is_num(depth) && depth > 0);
+    resolved_height = is_undef(height) ? default_tab_height(depth) : height;
+    assert(is_num(resolved_height) && resolved_height > _tab_support_height);
 
     translate([0, width / 2, 0])
     rotate([90, 0, 00])
     linear_extrude(width)
-    polygon(TAB_POLYGON);
+    polygon(tab_polygon(depth, resolved_height));
 }
 
 /*

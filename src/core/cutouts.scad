@@ -59,13 +59,21 @@ use <../helpers/grid_element.scad>
  *        134: +y wall, left edge.
  * @param center_top Default true, cutter [x, y] is centered on the current position.
  *        If false, cutter is in quadrant 1 [+x, +y].
+ * @param tab_depth How deep the tab protrudes into the bin, in mm.
+ *        Defaults to the library-standard depth.
+ * @param tab_height Total vertical extent of the tab, in mm.
+ *        Defaults to the height that keeps the support ramp at the
+ *        library-standard overhang angle.
+ *        Shrinking height while keeping depth fixed flattens the overhang
+ *        (the underside ramp angle = atan((height - support_height) / depth)).
  */
-module compartment_cutter(size_mm, scoop_percent=0, tab_width=0, tab_angle=90, center_top=true) {
+module compartment_cutter(size_mm, scoop_percent=0, tab_width=0, tab_angle=90, center_top=true, tab_depth=_tab_depth, tab_height=undef) {
     assert(is_valid_3d(size_mm) && is_positive(size_mm));
     assert(is_num(scoop_percent));
     assert(is_num(tab_angle)
         || (is_undef(tab_angle) && tab_width == 0));
     assert(is_bool(center_top));
+    assert(is_num(tab_depth) && tab_depth > 0);
 
     translate_by = center_top ? [0, 0, 0]
         : [size_mm.x/2, size_mm.y/2, 0];
@@ -85,7 +93,9 @@ module compartment_cutter(size_mm, scoop_percent=0, tab_width=0, tab_angle=90, c
             _compartment_tab(
                 size_mm+as_3d(TOLLERANCE),
                 tab_width+TOLLERANCE,
-                tab_angle);
+                tab_angle,
+                tab_depth,
+                tab_height);
         }
     }
 }
@@ -118,18 +128,22 @@ module _half_rounded_square(size_mm) {
  * @param tab_angle Determines where the tab is placed.
  *                  This will be normalized.
  *                  Regardless of compartment dimensions, corners are always at 45 degree intervals.
+ * @param tab_depth How deep the tab protrudes into the bin.
+ * @param tab_height Total vertical extent of the tab.
  */
-module _compartment_tab(size_mm, tab_width, tab_angle) {
+module _compartment_tab(size_mm, tab_width, tab_angle, tab_depth=_tab_depth, tab_height=undef) {
     assert(is_valid_2d(size_mm) && is_positive(size_mm));
     assert(is_num(tab_angle));
     assert(is_num(tab_width) && tab_width > 0);
+    assert(is_num(tab_depth) && tab_depth > 0);
 
     size_2d = as_2d(size_mm);
     normalized_angle = normalize_to_box(size_2d, tab_angle);
+    resolved_height = is_undef(tab_height) ? default_tab_height(tab_depth) : tab_height;
 
     snap_to_edge(size_2d, normalized_angle, tab_width)
-    translate([0, 0, -TAB_SIZE.y])
-    tab(tab_width);
+    translate([0, 0, -resolved_height])
+    tab(tab_width, tab_depth, resolved_height);
 }
 
 /**
@@ -175,8 +189,16 @@ module _compartment_scoop(size_mm, scoop_percent) {
  * @param tab_top_left_only If the tab will only be on the top left compartment.
  *        Only false is supported when `grid_element_current` is not available.
  * @param scoop 0.0-1.0 How much of a scoop should be present.
+ * @param tab_width Override the tab width (along the wall).
+ *        Defaults to `TAB_WIDTH_NOMINAL` for all styles except Full, which spans the compartment.
+ *        Ignored when style_tab is None (5).
+ * @param tab_depth How deep the tab protrudes into the bin, in mm.
+ *        Defaults to the library-standard depth.
+ * @param tab_height Total vertical extent of the tab, in mm.
+ *        Defaults to the height that keeps the support ramp at the
+ *        library-standard overhang angle.
  */
-module cut_compartment_auto(size_mm, style_tab=5, tab_top_left_only=false, scoop_percent=0) {
+module cut_compartment_auto(size_mm, style_tab=5, tab_top_left_only=false, scoop_percent=0, tab_width=undef, tab_depth=_tab_depth, tab_height=undef) {
 
     // Lambda so `grid_element_current()` is only called when needed.
     // It can throw!
@@ -186,11 +208,14 @@ module cut_compartment_auto(size_mm, style_tab=5, tab_top_left_only=false, scoop
         && grid_element_is_first_col(element);
 
     has_tab = style_tab != 5 && (!tab_top_left_only || is_top_left());
-    tab_width = !has_tab ? 0
-        : style_tab == 0 ? max(size_mm) : TAB_WIDTH_NOMINAL;
+    default_tab_width = style_tab == 0 ? max(size_mm) : TAB_WIDTH_NOMINAL;
+    resolved_tab_width = !has_tab ? 0
+        : is_undef(tab_width) ? default_tab_width
+        : tab_width;
     tab_angle = has_tab ? get_tab_angle(style_tab) : 0;
 
-    compartment_cutter(size_mm, scoop_percent, tab_width, tab_angle);
+    compartment_cutter(size_mm, scoop_percent, resolved_tab_width, tab_angle,
+                       tab_depth=tab_depth, tab_height=tab_height);
 }
 
 /**

@@ -99,6 +99,45 @@ TAB_POLYGON = [
  */
 TAB_SIZE = TAB_POLYGON[2];
 
+/**
+ * @brief Tab height yielding a given support-ramp angle at a given depth.
+ * @details Lets callers think in print-overhang terms rather than absolute
+ *          millimeters. Pair with `tab_height` on `cut_compartment_auto` /
+ *          `compartment_cutter` when picking the angle is more natural
+ *          than picking the height.
+ * @param depth How deep the tab protrudes into the bin.
+ * @param angle Support-ramp angle from horizontal, in degrees.
+ */
+function tab_height_from_angle(depth, angle) =
+    tan(angle) * depth + _tab_support_height;
+
+/**
+ * @brief Default tab height for a given inward protrusion depth.
+ * @details Thin wrapper around `tab_height_from_angle` using the library's
+ *          canonical overhang angle.
+ * @param depth How deep the tab protrudes into the bin.
+ */
+function default_tab_height(depth=_tab_depth) =
+    tab_height_from_angle(depth, _tab_support_angle);
+
+/**
+ * @brief Tab cross-section polygon.
+ * @details Matches `TAB_POLYGON` when both defaults are used.
+ *          The support-ramp angle is implied by the (depth, height) pair:
+ *          atan((height - _tab_support_height) / depth).
+ * @param depth How deep the tab protrudes into the bin.
+ * @param height Total vertical extent of the tab. Defaults to the height
+ *               that keeps the ramp at `_tab_support_angle`.
+ */
+function tab_polygon(depth=_tab_depth, height=undef) =
+    let(h = is_undef(height) ? default_tab_height(depth) : height)
+    [
+        [0, 0],
+        [0, h],
+        [depth, h],
+        [depth, h - _tab_support_height]
+    ];
+
 // ****************************************
 // Stacking Lip Constants
 // Based on https://gridfinity.xyz/specification/
